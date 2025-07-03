@@ -1,28 +1,28 @@
-# Use the UBI 9 base image
 FROM registry.access.redhat.com/ubi9/ubi
 
-# Set metadata (optional but good practice)
 LABEL maintainer="you@example.com"
-LABEL name="ubi9-httpd-php"
-LABEL summary="Apache + PHP on UBI9"
-LABEL description="A simple Apache and PHP setup on UBI9 base."
+LABEL summary="UBI9 with Apache and PHP"
 
 # Install Apache and PHP
 RUN dnf install -y httpd php && \
     dnf clean all
 
-# Copy app code (optional - can be added later)
-# COPY ./src/ /var/www/html/
+# Set ServerName to avoid warning
+RUN echo "ServerName localhost" >> /etc/httpd/conf/httpd.conf
 
-# Ensure permissions for OpenShift (non-root UID)
-RUN chown -R 1001:0 /var/www && \
-    chmod -R g+rwX /var/www
+# Fix permissions for OpenShift
+RUN mkdir -p /run/httpd && \
+    chown -R 1001:0 /run/httpd /var/www && \
+    chmod -R g+rwX /run/httpd /var/www
 
-# Expose Apache's default port
-EXPOSE 80
+# Force Apache to use non-root compatible user config
+RUN echo "User apache\nGroup root" > /etc/httpd/conf.d/container-user.conf
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Start Apache in the foreground (as required in containers)
+# Expose default Apache port
+EXPOSE 80
+
+# Start Apache
 CMD ["/usr/sbin/httpd", "-D", "FOREGROUND"]
