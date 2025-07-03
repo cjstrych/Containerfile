@@ -7,22 +7,19 @@ LABEL summary="UBI9 with Apache and PHP"
 RUN dnf install -y httpd php && \
     dnf clean all
 
-# Set ServerName to avoid warning
+# Suppress ServerName warning
 RUN echo "ServerName localhost" >> /etc/httpd/conf/httpd.conf
 
-# Fix permissions for OpenShift
-RUN mkdir -p /run/httpd && \
+# Ensure directories exist and are writable by any UID with group 0
+RUN mkdir -p /run/httpd /var/www/html && \
     chown -R 1001:0 /run/httpd /var/www && \
     chmod -R g+rwX /run/httpd /var/www
 
-# Force Apache to use non-root compatible user config
-RUN echo "User apache\nGroup root" > /etc/httpd/conf.d/container-user.conf
+# Copy your app (optional)
+# COPY ./src/ /var/www/html/
 
-# Set working directory
-WORKDIR /var/www/html
-
-# Expose default Apache port
+# Expose Apache port
 EXPOSE 80
 
-# Start Apache
+# Start Apache in foreground
 CMD ["/usr/sbin/httpd", "-D", "FOREGROUND"]
