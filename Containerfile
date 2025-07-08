@@ -1,52 +1,54 @@
 FROM registry.access.redhat.com/ubi9/ubi
 
 LABEL maintainer="you@example.com"
-LABEL summary="UBI9 with Apache and PHP"
+LABEL summary="UBI9 with Apache and PHP-FPM"
 LABEL name="ubi9-apache-php"
 LABEL version="1.0"
-LABEL description="A minimal Apache + PHP image based on Red Hat UBI9 for use on OpenShift or other container platforms."
+LABEL description="UBI9-based image running Apache with PHP-FPM for OpenShift-compatible containers."
 
-# Install Apache and PHP with mod_php
-RUN dnf install -y git httpd php php-cli php-common mod_php && \
+# Install Apache, PHP, and PHP-FPM
+RUN dnf install -y httpd php php-cli php-fpm php-mysqlnd php-pdo php-common && \
     dnf clean all && rm -rf /var/cache/dnf
 
-# Change Apache to listen on non-privileged port 8080
+# Change Apache to listen on port 8080
 RUN sed -i 's/^Listen 80/Listen 8080/' /etc/httpd/conf/httpd.conf
 
-# Set ServerName to avoid warnings
+# Avoid Apache warnings
 RUN echo "ServerName localhost" >> /etc/httpd/conf/httpd.conf
 
-# Ensure Apache knows how to handle .php files
-RUN echo '<FilesMatch \.php$>\n    SetHandler application/x-httpd-php\n</FilesMatch>' > /etc/httpd/conf.d/php.conf
+# Configure Apache to proxy PHP to php-fpm
+RUN echo '<FilesMatch \.php$>\n\
+    SetHandler "proxy:fcgi://localhost:9000"\n\
+</FilesMatch>' > /etc/httpd/conf.d/php-fpm.conf
 
-# Set DirectoryIndex to prioritize index.php
+# Set DirectoryIndex to use index.php first
 RUN sed -i 's/^DirectoryIndex .*/DirectoryIndex index.php index.html/' /etc/httpd/conf/httpd.conf
 
-# Create a writable log directory for OpenShift (non-root UID)
+# Writable log dir for OpenShift
 RUN mkdir -p /tmp/httpd && \
     chown -R 1001:0 /tmp/httpd && \
     chmod -R g+rwX /tmp/httpd
 
-# Add example index.php (working PHP test page)
-RUN echo '<?php echo "Hello from PHP!"; ?>' > /var/www/html/index.php
+# Sample PHP page
+RUN echo '<?php echo "Hello from PHP-FPM!"; ?>' > /var/www/html/index.php
 
-# Remove index.html to ensure index.php is served
+# Remove index.html to force PHP page
 RUN rm -f /var/www/html/index.html
 
-# Redirect logs to writable directory
+# Redirect logs to writable OpenShift path
 RUN sed -i 's|ErrorLog "logs/error_log"|ErrorLog "/tmp/httpd/error_log"|' /etc/httpd/conf/httpd.conf && \
     sed -i 's|CustomLog "logs/access_log" combined|CustomLog "/tmp/httpd/access_log" common|' /etc/httpd/conf/httpd.conf
 
-# Ensure Apache runtime directories are writable
-RUN mkdir -p /run/httpd /var/www/html && \
-    chown -R 1001:0 /run/httpd /var/www && \
-    chmod -R g+rwX /run/httpd /var/www
+# Ensure writable dirs for OpenShift
+RUN mkdir -p /run/httpd /var/www/html /run/php-fpm && \
+    chown -R 1001:0 /run/httpd /var/www /run/php-fpm && \
+    chmod -R g+rwX /run/httpd /var/www /run/php-fpm
 
-# Expose non-root HTTP port
+# Expose non-root port
 EXPOSE 8080
 
-# Optional: Run as OpenShift-compatible non-root user
+# Switch to non-root user (OpenShift-compatible)
 USER 1001
 
-# Start Apache in the foreground
-CMD ["/usr/sbin/httpd", "-D", "FOREGROUND"]
+# Run both Apache and PHP-FPM in foreground using dumb-init or bash workaround
+CMD /bin/bash -c "/usr/sbin/php-fpm --nodaemonize & /usr/sbin/httpd -D FOREGROUND"
