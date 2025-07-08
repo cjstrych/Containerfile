@@ -39,12 +39,12 @@ RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/httpd/conf/httpd.conf && \
     sed -i 's|^PidFile /run/httpd/httpd.pid|PidFile /tmp/httpd/httpd.pid|' /etc/httpd/conf/httpd.conf
 
 # Configure PHP-FPM for OpenShift
-RUN sed -i 's/^user = apache$/user = openshift/' /etc/php-fpm.d/www.conf && \
-    sed -i 's/^group = apache$/group = root/' /etc/php-fpm.d/www.conf && \
-    sed -i 's|^listen = /run/php-fpm/www.sock|listen = 127.0.0.1:9000|' /etc/php-fpm.d/www.conf && \
-    sed -i 's/^;listen.owner = nobody$/listen.owner = openshift/' /etc/php-fpm.d/www.conf && \
-    sed -i 's/^;listen.group = nobody$/listen.group = root/' /etc/php-fpm.d/www.conf && \
-    sed -i 's|^pid = /run/php-fpm/php-fpm.pid|pid = /tmp/php-fpm.pid|' /etc/php-fpm.conf
+RUN sed -i 's|^listen = /run/php-fpm/www.sock|listen = 127.0.0.1:9000|' /etc/php-fpm.d/www.conf && \
+    sed -i 's|^pid = /run/php-fpm/php-fpm.pid|pid = /tmp/php-fpm.pid|' /etc/php-fpm.conf && \
+    sed -i '/^user = apache$/d' /etc/php-fpm.d/www.conf && \
+    sed -i '/^group = apache$/d' /etc/php-fpm.d/www.conf && \
+    sed -i '/^;listen.owner = nobody$/d' /etc/php-fpm.d/www.conf && \
+    sed -i '/^;listen.group = nobody$/d' /etc/php-fpm.d/www.conf
 
 # Set proper permissions for OpenShift random user ID
 RUN chgrp -R 0 /var/www/html /var/log/httpd /var/run/httpd /tmp/httpd /run/php-fpm /etc/httpd /etc/php-fpm.d /etc/php-fpm.conf && \
