@@ -1,31 +1,72 @@
 FROM registry.access.redhat.com/ubi9/ubi
 
-LABEL maintainer="you@example.com"
-LABEL summary="UBI9 with Apache and PHP-FPM for OpenShift/Podman"
+# Install PHP 8.2, Apache, and other dependencies
+RUN dnf -y module enable php:8.2 && \
+    dnf -y install git httpd php php-fpm vim && \
+    dnf clean all
 
-# Install Apache and PHP-FPM
-RUN dnf install -y httpd php php-fpm && dnf clean all
+# Create required directories with proper permissions
+RUN mkdir -p /run/php-fpm/ && \
+    mkdir -p /var/www/html && \
+    mkdir -p /var/log/httpd && \
+    mkdir -p /var/run/httpd && \
+    mkdir -p /tmp/httpd
 
-# Configure Apache to listen on 8080 (non-root port)
-RUN sed -i 's/^Listen 80/Listen 8080/' /etc/httpd/conf/httpd.conf
+# Create phpinfo.php file
+RUN cat <<EOF > /var/www/html/phpinfo.php
+<?php
 
-# Proper php-fpm proxy config with closed FilesMatch
-RUN echo '<FilesMatch \.php$>\n    SetHandler "proxy:fcgi://127.0.0.1:9000"\n</FilesMatch>' \
-    > /etc/httpd/conf.d/php-fpm.conf
+// SHOW ALL INFORMATION, DEFAULTS TO INFO_ALL
+phpinfo();
 
-# Create PHP test page
-RUN echo "<?php echo 'Hello from PHP-FPM!'; ?>" > /var/www/html/index.php
+// SHOW JUST THE MODULE INFORMATION.
+// PHPINFO(8) YIELDS IDENTICAL RESULTS.
+phpinfo(INFO_MODULES);
 
-# Prepare writable directories for OpenShift non-root UID (1001)
-RUN mkdir -p /run/httpd /run/php-fpm /tmp/httpd && \
-    chown -R 1001:0 /run/httpd /run/php-fpm /tmp/httpd /var/www && \
-    chmod -R g+rwX /run/httpd /run/php-fpm /tmp/httpd /var/www
+?>
+EOF
 
-# Expose port 8080
-EXPOSE 8080
+# Configure Apache for OpenShift (non-root user)
+RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/httpd/conf/httpd.conf && \
+    sed -i 's/^#ServerName.*/ServerName localhost:8080/' /etc/httpd/conf/httpd.conf && \
+    sed -i 's/^User apache$/User 1001/' /etc/httpd/conf/httpd.conf && \
+    sed -i 's/^Group apache$/Group 0/' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^DocumentRoot "/var/www/html"|DocumentRoot "/var/www/html"|' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^<Directory "/var/www/html">|<Directory "/var/www/html">|' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^ErrorLog logs/error_log|ErrorLog /dev/stderr|' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^CustomLog logs/access_log|CustomLog /dev/stdout|' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^PidFile /run/httpd/httpd.pid|PidFile /tmp/httpd/httpd.pid|' /etc/httpd/conf/httpd.conf
 
-# Switch to OpenShift-compatible user
+# Configure PHP-FPM for OpenShift
+RUN sed -i 's/^user = apache$/user = 1001/' /etc/php-fpm.d/www.conf && \
+    sed -i 's/^group = apache$/group = 0/' /etc/php-fpm.d/www.conf && \
+    sed -i 's|^listen = /run/php-fpm/www.sock|listen = 127.0.0.1:9000|' /etc/php-fpm.d/www.conf && \
+    sed -i 's/^;listen.owner = nobody$/listen.owner = 1001/' /etc/php-fpm.d/www.conf && \
+    sed -i 's/^;listen.group = nobody$/listen.group = 0/' /etc/php-fpm.d/www.conf && \
+    sed -i 's|^pid = /run/php-fpm/php-fpm.pid|pid = /tmp/php-fpm.pid|' /etc/php-fpm.conf
+
+# Set proper permissions for OpenShift random user ID
+RUN chgrp -R 0 /var/www/html /var/log/httpd /var/run/httpd /tmp/httpd /run/php-fpm /etc/httpd /etc/php-fpm.d /etc/php-fpm.conf && \
+    chmod -R g+rwX /var/www/html /var/log/httpd /var/run/httpd /tmp/httpd /run/php-fpm /etc/httpd /etc/php-fpm.d /etc/php-fpm.conf
+
+# Create a startup script to run both php-fpm and httpd
+RUN cat <<EOF > /start.sh
+#!/bin/bash
+# Start PHP-FPM in background
+php-fpm &
+# Start Apache in foreground
+httpd -D FOREGROUND
+EOF
+
+RUN chmod +x /start.sh && \
+    chgrp 0 /start.sh && \
+    chmod g+rwx /start.sh
+
+# Use non-root user (OpenShift will assign random UID in root group)
 USER 1001
 
-# Start PHP-FPM and Apache together in foreground
-CMD /bin/bash -c "/usr/sbin/php-fpm --nodaemonize & /usr/sbin/httpd -D FOREGROUND"
+# Expose port 8080 (non-privileged port)
+EXPOSE 8080
+
+# Start both services
+CMD ["/start.sh"]
