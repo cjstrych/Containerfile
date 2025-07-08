@@ -13,18 +13,16 @@ RUN mkdir -p /run/php-fpm/ && \
     mkdir -p /tmp/httpd
 
 # Create phpinfo.php file
-RUN cat <<EOF > /var/www/html/phpinfo.php
-<?php
-
-// SHOW ALL INFORMATION, DEFAULTS TO INFO_ALL
-phpinfo();
-
-// SHOW JUST THE MODULE INFORMATION.
-// PHPINFO(8) YIELDS IDENTICAL RESULTS.
-phpinfo(INFO_MODULES);
-
-?>
-EOF
+RUN echo '<?php' > /var/www/html/phpinfo.php && \
+    echo '' >> /var/www/html/phpinfo.php && \
+    echo '// SHOW ALL INFORMATION, DEFAULTS TO INFO_ALL' >> /var/www/html/phpinfo.php && \
+    echo 'phpinfo();' >> /var/www/html/phpinfo.php && \
+    echo '' >> /var/www/html/phpinfo.php && \
+    echo '// SHOW JUST THE MODULE INFORMATION.' >> /var/www/html/phpinfo.php && \
+    echo '// PHPINFO(8) YIELDS IDENTICAL RESULTS.' >> /var/www/html/phpinfo.php && \
+    echo 'phpinfo(INFO_MODULES);' >> /var/www/html/phpinfo.php && \
+    echo '' >> /var/www/html/phpinfo.php && \
+    echo '?>' >> /var/www/html/phpinfo.php
 
 # Configure Apache for OpenShift (non-root user)
 RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/httpd/conf/httpd.conf && \
@@ -50,13 +48,11 @@ RUN chgrp -R 0 /var/www/html /var/log/httpd /var/run/httpd /tmp/httpd /run/php-f
     chmod -R g+rwX /var/www/html /var/log/httpd /var/run/httpd /tmp/httpd /run/php-fpm /etc/httpd /etc/php-fpm.d /etc/php-fpm.conf
 
 # Create a startup script to run both php-fpm and httpd
-RUN cat <<EOF > /start.sh
-#!/bin/bash
-# Start PHP-FPM in background
-php-fpm &
-# Start Apache in foreground
-httpd -D FOREGROUND
-EOF
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo '# Start PHP-FPM in background' >> /start.sh && \
+    echo 'php-fpm &' >> /start.sh && \
+    echo '# Start Apache in foreground' >> /start.sh && \
+    echo 'httpd -D FOREGROUND' >> /start.sh
 
 RUN chmod +x /start.sh && \
     chgrp 0 /start.sh && \
