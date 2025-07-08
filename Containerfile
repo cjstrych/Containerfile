@@ -34,8 +34,8 @@ RUN sed -i 's/^Listen 80$/Listen 8080/' /etc/httpd/conf/httpd.conf && \
     sed -i 's/^Group apache$/Group root/' /etc/httpd/conf/httpd.conf && \
     sed -i 's|^DocumentRoot "/var/www/html"|DocumentRoot "/var/www/html"|' /etc/httpd/conf/httpd.conf && \
     sed -i 's|^<Directory "/var/www/html">|<Directory "/var/www/html">|' /etc/httpd/conf/httpd.conf && \
-    sed -i 's|^ErrorLog logs/error_log|ErrorLog /dev/stderr|' /etc/httpd/conf/httpd.conf && \
-    sed -i 's|^CustomLog logs/access_log|CustomLog /dev/stdout|' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^ErrorLog logs/error_log|ErrorLog /tmp/httpd/error_log|' /etc/httpd/conf/httpd.conf && \
+    sed -i 's|^CustomLog logs/access_log|CustomLog /tmp/httpd/access_log|' /etc/httpd/conf/httpd.conf && \
     sed -i 's|^PidFile /run/httpd/httpd.pid|PidFile /tmp/httpd/httpd.pid|' /etc/httpd/conf/httpd.conf
 
 # Configure PHP-FPM for OpenShift
